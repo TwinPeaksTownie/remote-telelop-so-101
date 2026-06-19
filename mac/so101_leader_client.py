@@ -25,27 +25,38 @@ logging.basicConfig(level=logging.INFO)
 
 
 def main():
+    print("DEBUG: Entering main()", flush=True)
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="192.168.0.130")
     ap.add_argument("--port", default="/dev/cu.usbmodem5B415318721")
     ap.add_argument("--id", default="leader")
     args = ap.parse_args()
 
+    print(f"DEBUG: Initializing leader config with port={args.port}, id={args.id}", flush=True)
     leader = SO101Leader(SOLeaderTeleopConfig(port=args.port, id=args.id))
-    leader.connect()
-    logging.info("leader connected on %s", args.port)
+    
+    print("DEBUG: Connecting to leader...", flush=True)
+    try:
+        leader.connect()
+        print("DEBUG: Leader connected successfully!", flush=True)
+    except Exception as e:
+        print(f"DEBUG: Exception during leader.connect(): {e}", flush=True)
+        raise e
 
+    print(f"DEBUG: Setting up ZMQ sockets to host={args.host}...", flush=True)
     ctx = zmq.Context()
     cmd_sock = ctx.socket(zmq.PUSH)
     cmd_sock.setsockopt(zmq.CONFLATE, 1)
     cmd_sock.setsockopt(zmq.LINGER, 0)
     cmd_sock.connect(f"tcp://{args.host}:{PORT_ZMQ_CMD}")
+    
     obs_sock = ctx.socket(zmq.PULL)
     obs_sock.setsockopt(zmq.CONFLATE, 1)
     obs_sock.setsockopt(zmq.LINGER, 0)
     obs_sock.connect(f"tcp://{args.host}:{PORT_ZMQ_OBS}")
+    print("DEBUG: ZMQ sockets connected successfully!", flush=True)
 
-    logging.info("streaming to %s at %d Hz, ctrl-c to stop", args.host, FPS)
+    print("DEBUG: Entering stream loop...", flush=True)
     n = 0
     try:
         while True:
@@ -53,7 +64,7 @@ def main():
             try:
                 action = leader.get_action()
             except Exception as e:
-                logging.warning("failed to get leader action: %s, retrying...", e)
+                print(f"DEBUG: exception in get_action(): {e}", flush=True)
                 try:
                     leader.bus.port_handler.is_using = False
                 except Exception:
@@ -74,20 +85,26 @@ def main():
             try:
                 cmd_sock.send_string(json.dumps(serializable_action), flags=zmq.NOBLOCK)
             except zmq.Again:
+                print("DEBUG: zmq.Again exception caught on send_string", flush=True)
                 pass
+            except Exception as e:
+                print(f"DEBUG: Send exception: {e}", flush=True)
 
             try:
-                obs_sock.recv_string(zmq.NOBLOCK)  # drain; keeps obs flowing for future use
+                obs_sock.recv_string(zmq.NOBLOCK)
             except zmq.Again:
                 pass
+            except Exception as e:
+                print(f"DEBUG: Recv exception: {e}", flush=True)
+                
             n += 1
-            if n % 300 == 0:
-                logging.info("streaming ok, %d frames sent", n)
+            if n % 100 == 0:
+                print(f"DEBUG: sent {n} frames to Pi", flush=True)
             time.sleep(max(1 / FPS - (time.time() - loop_start), 0))
     except KeyboardInterrupt:
-        pass
+        print("DEBUG: KeyboardInterrupt in stream loop", flush=True)
     finally:
-        logging.info("disconnecting leader")
+        print("DEBUG: Disconnecting leader and ZMQ sockets", flush=True)
         leader.disconnect()
         cmd_sock.close()
         obs_sock.close()
