@@ -44,6 +44,17 @@ def main():
         raise e
 
     print(f"DEBUG: Setting up ZMQ sockets to host={args.host}...", flush=True)
+    # Diagnostic raw TCP socket test
+    import socket
+    try:
+        diag_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        diag_sock.settimeout(3.0)
+        print(f"DEBUG: Raw TCP diagnostic connecting to {args.host}:5555...", flush=True)
+        diag_sock.connect((args.host, 5555))
+        print("DEBUG: Raw TCP diagnostic succeeded!", flush=True)
+        diag_sock.close()
+    except Exception as diag_err:
+        print(f"DEBUG: Raw TCP diagnostic FAILED: {diag_err}", flush=True)
     ctx = zmq.Context()
     cmd_sock = ctx.socket(zmq.PUSH)
     cmd_sock.setsockopt(zmq.CONFLATE, 1)
