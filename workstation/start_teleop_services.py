@@ -114,18 +114,20 @@ def main():
         mac_ssh.connect(MAC_IP, username='twinpeakstownie', password='reachyultradancemix9000', timeout=8)
         
         # Check if already running on Mac Mini
-        stdin, stdout, stderr = mac_ssh.exec_command("ps aux | grep -v grep | grep -E 'so101_leader_client|remote_teleop.sh'")
+        stdin, stdout, stderr = mac_ssh.exec_command("ps aux | grep -v grep | grep -E 'so101_leader_client.py'")
         procs = stdout.read().decode('utf-8').strip()
         if not procs:
-            print("  - Starting fresh leader client tracking script inside screen...")
-            mac_ssh.exec_command("pkill -9 -f remote_teleop.sh")
+            print("  - Starting fresh leader client tracking script using nohup and caffeinate...")
             mac_ssh.exec_command("pkill -9 -f so101_leader_client.py")
+            mac_ssh.exec_command("pkill -9 -f remote_teleop.sh")
             mac_ssh.exec_command("screen -X -S leader_client quit")
             time.sleep(1.0)
             mac_ssh.exec_command(
-                "cd /Users/twinpeakstownie/lerobot && chmod +x ./remote_teleop.sh && /usr/bin/screen -S leader_client -d -m ./remote_teleop.sh"
+                "nohup caffeinate -i /Users/twinpeakstownie/lerobot/.venv/bin/python -u "
+                "/Users/twinpeakstownie/lerobot/so101_leader_client.py --host 192.168.0.130 "
+                "> /tmp/so101_teleop.log 2>&1 &"
             )
-            print("  - Mac Mini tracking client launched successfully in screen.")
+            print("  - Mac Mini tracking client launched successfully via nohup + caffeinate.")
         else:
             print("  - Mac Mini tracking client is already running.")
     except Exception as e:
