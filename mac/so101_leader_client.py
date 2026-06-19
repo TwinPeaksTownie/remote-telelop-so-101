@@ -60,7 +60,22 @@ def main():
                     pass
                 time.sleep(0.01)
                 continue
-            cmd_sock.send_string(json.dumps(action), flags=zmq.NOBLOCK)
+
+            # Convert PyTorch Tensors/NumPy arrays to JSON-serializable lists
+            if isinstance(action, dict):
+                serializable_action = {
+                    k: v.tolist() if hasattr(v, "tolist") else v 
+                    for k, v in action.items()
+                }
+            else:
+                serializable_action = action.tolist() if hasattr(action, "tolist") else action
+
+            # Catch zmq.Again to prevent crashes when the host is not ready
+            try:
+                cmd_sock.send_string(json.dumps(serializable_action), flags=zmq.NOBLOCK)
+            except zmq.Again:
+                pass
+
             try:
                 obs_sock.recv_string(zmq.NOBLOCK)  # drain; keeps obs flowing for future use
             except zmq.Again:
